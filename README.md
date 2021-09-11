@@ -1,8 +1,35 @@
-# sample
+# JHIPSTER 7 OAuth Sample
 
 This application was generated using JHipster 7.1.0, you can find documentation and help at [https://www.jhipster.tech/documentation-archive/v7.1.0](https://www.jhipster.tech/documentation-archive/v7.1.0).
 
-## Development
+This applicaiton was generated using the Monolithic option in JHipster with H2 in-memory DB for local development and Authentication Type of `oauth2`. Code was then added to provide a web API endpoint of `/api/gusto-current-user` so that it uses the WebClient class to access an external API at `https://api.gusto-demo.com/v1/me`. However, the  automatic redirect to the Gusto login page and authorization page appears to not be working. The same code to access the Gusto API is in another sample Spring Boot application (https://github.com/terafuze/spring-security-oauth-5-2-gusto). However, the Gusto login page **IS** displayed as expected in the spring-security-oauth-5-2-gusto application. 
+
+
+
+## Local Deployment
+
+Assuming that you have deployed locally Jhipster 7 monolithic apps with Angular before, the following should be all you need to run this application locally and to re-create the error that I'm facing...
+
+1. Start Keycloak in a terminal window: `docker-compose -f src/main/docker/keycloak.yml up`
+2. Start the Spring Boot application using the Maven wrapper: `./mvnw` (on OSx)
+3. Start the frontend Angular app: `npm start`
+4. Go to `http://localhost:9000` in a browser. Sign in as admin/admin.
+5. After logging in, enter the following URL into the browser: `http://localhost:9000/api/gusto-current-user`
+
+You will receive the following HTTP response (which will be displayed in the browser): 
+
+```
+{
+type: "https://www.jhipster.tech/problem/problem-with-message",
+title: "Internal Server Error",
+status: 500,
+detail: "[client_authorization_required] Authorization required for Client Registration Id: gusto",
+path: "/api/gusto-current-user",
+message: "error.http.500"
+}
+```
+
+## JHipster Standard Development Documentation
 
 Before you can build this project, you must install and configure the following dependencies on your machine:
 
