@@ -4,8 +4,6 @@ This application was generated using JHipster 7.1.0, you can find documentation 
 
 This applicaiton was generated using the Monolithic option in JHipster with H2 in-memory DB for local development and Authentication Type of `oauth2`. Code was then added to provide a web API endpoint of `/api/gusto-current-user` so that it uses the WebClient class to access an external API at `https://api.gusto-demo.com/v1/me`. However, the  automatic redirect to the Gusto login page and authorization page appears to not be working. The same code to access the Gusto API is in another sample Spring Boot application (https://github.com/terafuze/spring-security-oauth-5-2-gusto). However, the Gusto login page **IS** displayed as expected in the spring-security-oauth-5-2-gusto application. 
 
-
-
 ## Local Deployment
 
 Assuming that you have deployed locally Jhipster 7 monolithic apps with Angular before, the following should be all you need to run this application locally and to re-create the error that I'm facing...
@@ -27,6 +25,147 @@ detail: "[client_authorization_required] Authorization required for Client Regis
 path: "/api/gusto-current-user",
 message: "error.http.500"
 }
+```
+
+## Gusto External API Related Code
+
+**com.mycompany.myapp.web.rest.GustoRestController.java**
+
+```
+package com.mycompany.myapp.web.rest;
+
+import static org.springframework.security.oauth2.client.web.reactive.function.client.ServletOAuth2AuthorizedClientExchangeFilterFunction.clientRegistrationId;
+
+import com.mycompany.myapp.models.CurrentUserResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.annotation.RegisteredOAuth2AuthorizedClient;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.reactive.function.client.WebClient;
+
+@RestController
+@RequestMapping("/api")
+public class GustoRestController {
+
+    private final Logger log = LoggerFactory.getLogger(GustoRestController.class);
+
+    @Value("${gusto-api.current-user-endpoint}")
+    private String currentUserEndpoint;
+
+    @Value("${gusto-api.employees-endpoint}")
+    private String employeesEndpoint;
+
+    @Autowired
+    private WebClient webClient;
+
+    public GustoRestController() {}
+
+    @GetMapping(value = "/gusto-token")
+    public String gustoToken(@RegisteredOAuth2AuthorizedClient("gusto") OAuth2AuthorizedClient gustoAuthorizedClient) {
+        log.debug("Gusto Access Token: {}", gustoAuthorizedClient.getAccessToken().getTokenValue());
+
+        return gustoAuthorizedClient.getAccessToken().getTokenValue();
+    }
+
+    @GetMapping(value = "/gusto-current-user")
+    public ResponseEntity<CurrentUserResponse> getCurrentUser(
+        @RegisteredOAuth2AuthorizedClient("gusto") OAuth2AuthorizedClient gustoAuthorizedClient
+    ) {
+        log.debug("Gusto Access Token: {}", gustoAuthorizedClient.getAccessToken().getTokenValue());
+
+        ResponseEntity<CurrentUserResponse> response =
+            this.webClient.get()
+                .uri(this.currentUserEndpoint)
+                .attributes(clientRegistrationId("gusto"))
+                .retrieve()
+                .toEntity(CurrentUserResponse.class)
+                .block();
+        log.debug("Got HTTP Response!");
+        CurrentUserResponse currentUser = response.getBody();
+        log.info("Current User: {}", currentUser.toString());
+
+        return response;
+    }
+}
+```
+
+
+**com.mycompany.myapp.config.WebClientConfig.java**
+
+```
+@Configuration
+public class WebClientConfig {
+
+    @Bean
+    WebClient webClient(OAuth2AuthorizedClientManager authorizedClientManager) {
+        ServletOAuth2AuthorizedClientExchangeFilterFunction oauth2Client = new ServletOAuth2AuthorizedClientExchangeFilterFunction(
+            authorizedClientManager
+        );
+
+        oauth2Client.setDefaultClientRegistrationId("gusto");
+        oauth2Client.setDefaultOAuth2AuthorizedClient(false);
+
+        return WebClient.builder().apply(oauth2Client.oauth2Configuration()).filter(WebClientFilter.logRequest()).build();
+    }
+
+    @Bean
+    OAuth2AuthorizedClientManager authorizedClientManager(
+        ClientRegistrationRepository clientRegistrationRepository,
+        OAuth2AuthorizedClientRepository authorizedClientRepository
+    ) {
+        OAuth2AuthorizedClientProvider authorizedClientProvider = OAuth2AuthorizedClientProviderBuilder
+            .builder()
+            .authorizationCode()
+            .refreshToken()
+            .build();
+
+        // use the Default OAuth2 Authorized Client Manager as the authorized client manager.
+        DefaultOAuth2AuthorizedClientManager authorizedClientManager = new DefaultOAuth2AuthorizedClientManager(
+            clientRegistrationRepository,
+            authorizedClientRepository
+        );
+
+        // Configure the Authorized Client Manager with the Authorized Client Provider
+        authorizedClientManager.setAuthorizedClientProvider(authorizedClientProvider);
+
+        return authorizedClientManager;
+    }
+}
+```
+
+**src/main/resources/application.yml**
+
+```
+  security:
+    oauth2:
+      client:
+        provider:
+          gusto:
+            authorization-uri: https://api.gusto-demo.com/oauth/authorize
+            token-uri: https://api.gusto-demo.com/oauth/token
+          oidc:
+            issuer-uri: http://localhost:9080/auth/realms/jhipster
+        registration:
+          gusto:
+            provider: gusto
+            client-id: igF4ABTff_pkvy8j8YT39bd1kaWpEq2Vc-Hal6Amlbk
+            client-secret: iRlKbMWSaaCUTDjkkct1T-GpAgv3mde4OAT1dLw82Os
+            authorization-grant-type: authorization_code
+            redirect-uri: '{baseUrl}/api/authorized/'
+          oidc:
+            client-id: web_app
+            client-secret: web_app
+            scope: openid,profile,email
+gusto-api:
+  current-user-endpoint: https://api.gusto-demo.com/v1/me
+  employees-endpoint: https://api.gusto-demo.com/v1/companies/{companyId}/employees
+  base-uri: https://api.gusto-demo.com/oauth/token
 ```
 
 ## JHipster Standard Development Documentation
